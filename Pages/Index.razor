@@ -2,16 +2,22 @@
 @using Google.Cloud.Firestore
 @using System.Threading.Tasks
 @using System.Collections.Generic
+@using Google.Cloud.Storage.V1;
+@using Microsoft.AspNetCore.Http;
+@using System.IO;
 
 <h3>Cadastro de Usuário</h3>
 
 <input @bind="user.Nome" placeholder="Nome">
 <input @bind="user.UserId" placeholder="ID do Usuário">
+<input @ref="ImageFile" type="file" placeholder="Url">
 
 <button @onclick="SaveUser">Salvar</button>
 
 @code {
     FirestoreDb db;
+
+    ElementReference ImageFile;
 
     public class User
     {
@@ -33,6 +39,8 @@
         {
             CollectionReference collectionReference = db.Collection("usuarios");
 
+            user.ImageUrl = UploadImagemParaFirebaseStorage();
+
             Dictionary<string, object> userDict = new Dictionary<string, object>
         {
                 { "Nome", user.Nome },
@@ -41,6 +49,39 @@
             };
 
             await collectionReference.AddAsync(userDict);
+        }
+    }
+
+    private async Task<string> UploadImagemParaFirebaseStorage(IFormFile imagemFile)
+    {
+        if (imagemFile != null && imagemFile.Length > 0)
+        {
+            string nomeArquivo = Guid.NewGuid() + Path.GetExtension(imagemFile.FileName);
+
+            // Configure a StorageClient para interagir com o Firebase Storage
+            StorageClient storage = StorageClient.Create();
+
+            string nomeBucket = "crud-firebase-54a7c.appspot.com"; // Substitua pelo nome do seu bucket
+                                                                   // Em caso do arquivo ser armazenado dentro de uma pasta já existente, deve-se adcionar
+                                                                   // o nome da mesma concatenando antes do 'nomrArquivo', ex: "'pasta-imagens/' + nomeArquivo;"
+            string caminhoNoStorage = nomeArquivo;
+
+            using (var stream = imagemFile.OpenReadStream())
+            {
+                // Configure a TransferOptions
+                var options = new UploadObjectOptions
+                    {
+                        PredefinedAcl = PredefinedObjectAcl.PublicRead // Define o arquivo como público
+                    };
+
+                // Faça o upload da imagem para o Firebase Storage
+                storage.UploadObject(nomeBucket, caminhoNoStorage, null, stream, options);
+
+                // Construa a URL da imagem no Firebase Storage
+                string urlImagem = $"https://storage.googleapis.com/{nomeBucket}/{caminhoNoStorage}";
+
+                return urlImagem;
+            }
         }
     }
 }
